@@ -217,11 +217,17 @@ class ResponseMessage:
         elif self.__header == 0xFE:
             self.__packet = ResponseMessageEOF()
         elif self.__header == 0xFF:
-            self.__packet = ResponseMessageErr()
+            self.__packet = ResponseMessageERR()
         else:
             return False
 
         return self.__packet.parse(data[offset : ])
+
+    def dump(self):
+        for property, value in vars(self).iteritems():
+            print property, ": ", value
+        if self.__packet != None:
+            self.__packet.dump()
 
 class ResponseMessageOK(ResponseMessage):
     def __init__(self):
@@ -258,9 +264,9 @@ class ResponseMessageEOF(ResponseMessage):
 
     def parse(self, data):
         offset = 0
-        self.__warnings = Utils.str2int(data, RESPONSE_PACKET_WARNING_BYTES)
+        self.__warnings = Utils.str2int(data[offset : ], RESPONSE_PACKET_WARNING_BYTES)
         offset += RESPONSE_PACKET_WARNING_BYTES
-        self.__status_flags = Utils.str2int(data, RESPONSE_PACKET_STATUSFLAGS_BYTES)
+        self.__status_flags = Utils.str2int(data[offset : ], RESPONSE_PACKET_STATUSFLAGS_BYTES)
         offset += RESPONSE_PACKET_STATUSFLAGS_BYTES
         return True
 
@@ -268,7 +274,7 @@ class ResponseMessageEOF(ResponseMessage):
         for property, value in vars(self).iteritems():
             print property, ": ", value
 
-class ResponseMessageErr(ResponseMessage):
+class ResponseMessageERR(ResponseMessage):
     def __init__(self):
         self.__header = 0xFF        # 1 byte(defaule:0xfe)
         self.__error_code = 0       # 2 bytes
@@ -278,7 +284,7 @@ class ResponseMessageErr(ResponseMessage):
 
     def parse(self, data):
         offset = 0
-        self.__error_code = Utils.str2int(data, RESPONSE_PACKET_ERRORCODE_BYTES)
+        self.__error_code = Utils.str2int(data[offset : ], RESPONSE_PACKET_ERRORCODE_BYTES)
         offset += RESPONSE_PACKET_ERRORCODE_BYTES
         self.__sql_state_marker = data[offset : offset + RESPONSE_PACKET_SQLSTATEMARKER_BYTES]
         offset += RESPONSE_PACKET_SQLSTATEMARKER_BYTES

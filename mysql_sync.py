@@ -1,7 +1,7 @@
 import socket
 from binascii import b2a_hex, a2b_hex
 from Packet import Packet, PacketManage
-from Message import ServerHandShakeMessage, ClientHandShakeMessage
+from Message import ServerHandShakeMessage, ClientHandShakeMessage, ResponseMessage
 from Utils import Utils
 from MySQLCommand import CommandRegisterSlave
 from MySQLCommand import CommandDumpBinlog
@@ -77,7 +77,7 @@ def package_dump():
     dump_package = Packet()
     com_dump = CommandDumpBinlog()
     com_dump.set_binlog_filename("data.000008")
-    com_dump.set_binlog_pos(815)
+    com_dump.set_binlog_pos(1272)
     com_dump.set_server_id(100)
     com_dump.set_flags(Constants.BINLOG_DUMP_NON_BLOCK)
 
@@ -148,6 +148,7 @@ def naive_client():
     while len(data) == 1024:
         s.recv(1024)
         read_data += data
+    print len(read_data)
     print repr(read_data)
     print b2a_hex(read_data)
 
@@ -156,9 +157,15 @@ def naive_client():
 
     for packet in packet_list:
         print '-------- packet ' + str(packet.index()) + '-----------'
-        binlog_event = BinlogEvent()
-        binlog_event.parse(packet.payload())
-        binlog_event.header().dump()
+        packet_type = Utils.str2int(packet.payload(), 1)
+        if packet_type == 0x00:
+            binlog_event = BinlogEvent()
+            binlog_event.parse(packet.payload())
+            binlog_event.header().dump()
+        else:
+            packet_eof = ResponseMessage()
+            packet_eof.parse(packet.payload())
+            packet_eof.dump()
 
     print '++++++++++ server to client header +++++++++++++'
 
