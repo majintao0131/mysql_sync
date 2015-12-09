@@ -6,19 +6,44 @@ import Constants
 from Utils import Utils
 from binascii import a2b_hex
 
+"""
+Register Command
+struct:
+    command type : 1 byte
+    server id : 4 bytes
+    slaves hostname length : 1 byte
+    slaves hostname : (slaves hostname length) bytes
+    slaves user len : 1 byte
+    slaves user : (slaves user len) bytes
+    slaves password len : 1 byte
+    slaves password : (slaves password len) bytes
+    slaves mysql port : 2 bytes
+    replication rank : 4 bytes
+    master id : 4 bytes
+"""
 class CommandRegisterSlave:
-    def __init__(self):
-        self.__com_type = Constants.COM_REGISTER_SLAVE      # 1 byte
-        self.__server_id = 0                                # 4 bytes
-        self.__slaves_hostname_length = 0                   # 1 byte
-        self.__slaves_hostname = ''                         # slaves hostname length bytes
-        self.__slaves_user_len = 0                          # 1 byte
-        self.__slaves_user = ''                             # slaves user len bytes
-        self.__slaves_password_len = 0                      # 1 byte
-        self.__slaves_password = ''                         # password len bytes
-        self.__slaves_mysql_port = 0                        # 2 bytes
-        self.__replication_rank = 0                         # 4 bytes
-        self.__master_id = 0                                # 4 bytes
+    def __init__(self,
+                 server_id,
+                 slaves_hostname_length,
+                 slaves_hostname,
+                 slaves_user_len,
+                 slaves_user,
+                 slaves_password_len,
+                 slaves_password,
+                 slaves_mysql_port,
+                 master_id,
+                 replication_rank = 0):
+        self.__com_type = Constants.COM_REGISTER_SLAVE
+        self.__server_id = server_id
+        self.__slaves_hostname_length = slaves_hostname_length
+        self.__slaves_hostname = slaves_hostname
+        self.__slaves_user_len = slaves_user_len
+        self.__slaves_user = slaves_user
+        self.__slaves_password_len = slaves_password_len
+        self.__slaves_password = slaves_password
+        self.__slaves_mysql_port = slaves_mysql_port
+        self.__replication_rank = replication_rank
+        self.__master_id = master_id
 
     def set_server_id(self, server_id):
         self.__server_id = server_id
@@ -88,12 +113,12 @@ class CommandRegisterSlave:
             print property, ": ", value
 
 class CommandDumpBinlog:
-    def __init__(self):
-        self.__com_type = Constants.COM_BINLOG_DUMP     # 1 byte
-        self.__binlog_pos = 0                           # 4 bytes
-        self.__flags = 0                                # 2 bytes
-        self.__server_id = 0                            # 4 bytes
-        self.__binlog_filename = ''                     # NULL end
+    def __init__(self, binlog_pos, flags, server_id, binlog_filename):
+        self.__com_type = Constants.COM_BINLOG_DUMP         # 1 byte
+        self.__binlog_pos = binlog_pos                      # 4 bytes
+        self.__flags = flags                                # 2 bytes
+        self.__server_id = server_id                        # 4 bytes
+        self.__binlog_filename = binlog_filename            # NULL end
 
     def set_binlog_pos(self, pos):
         self.__binlog_pos = pos
@@ -125,5 +150,17 @@ class CommandDumpBinlog:
 
         buffer += self.__binlog_filename
         buf_len += len(self.__binlog_filename)
+
+        return (buffer, buf_len)
+
+class CommandQuitBinlog:
+    def __init__(self):
+        self.__com_type = Constants.COM_QUIT
+
+    def package(self):
+        buffer = ''
+        buf_len = 0
+        buffer += a2b_hex(Utils.int2hex(self.__com_type, 1))
+        buf_len += 1
 
         return (buffer, buf_len)

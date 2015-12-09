@@ -113,6 +113,13 @@ SERVER_STATUS_IN_TRANS_READONLY = 0x2000    # in a read-only transaction
 SERVER_SESSION_STATE_CHANGED = 0x4000       # connection state information has changed
 
 """
+Server Response Header
+"""
+SERVER_RESPONSE_OK = 0x00
+SERVER_RESPONSE_EOF = 0xFE
+SERVER_RESPONSE_ERR = 0xFF
+
+"""
 COMMAND FLAGS
 """
 BINLOG_DUMP_NON_BLOCK = 0x01
@@ -184,3 +191,64 @@ Intvar event type
 INTVAR_INVALID_INT_EVENT = 0x00
 INTVAR_LAST_INSERT_ID_EVENT = 0x01
 INTVAR_INSERT_ID_EVENT = 0x02
+
+"""
+Column Types
+"""
+MYSQL_TYPE_DECIMAL = 0x00       # Implemented by ProtocolBinary::MYSQL_TYPE_DECIMAL
+MYSQL_TYPE_TINY = 0x01          # Implemented by ProtocolBinary::MYSQL_TYPE_TINY
+MYSQL_TYPE_SHORT =  0x02        # Implemented by ProtocolBinary::MYSQL_TYPE_SHORT
+MYSQL_TYPE_LONG = 0x03          # Implemented by ProtocolBinary::MYSQL_TYPE_LONG
+MYSQL_TYPE_FLOAT = 0x04         # Implemented by ProtocolBinary::MYSQL_TYPE_FLOAT
+MYSQL_TYPE_DOUBLE = 0x05        # Implemented by ProtocolBinary::MYSQL_TYPE_DOUBLE
+MYSQL_TYPE_NULL = 0x06          # Implemented by ProtocolBinary::MYSQL_TYPE_NULL
+MYSQL_TYPE_TIMESTAMP = 0x07     # Implemented by ProtocolBinary::MYSQL_TYPE_TIMESTAMP
+MYSQL_TYPE_LONGLONG = 0x08      # Implemented by ProtocolBinary::MYSQL_TYPE_LONGLONG
+MYSQL_TYPE_INT24 = 0x09         # Implemented by ProtocolBinary::MYSQL_TYPE_INT24
+MYSQL_TYPE_DATE = 0x0a          # Implemented by ProtocolBinary::MYSQL_TYPE_DATE
+MYSQL_TYPE_TIME = 0x0b          # Implemented by ProtocolBinary::MYSQL_TYPE_TIME
+MYSQL_TYPE_DATETIME = 0x0c      # Implemented by ProtocolBinary::MYSQL_TYPE_DATETIME
+MYSQL_TYPE_YEAR = 0x0d          # Implemented by ProtocolBinary::MYSQL_TYPE_YEAR
+MYSQL_TYPE_NEWDATE = 0x0e       # see Protocol::MYSQL_TYPE_DATE
+MYSQL_TYPE_VARCHAR = 0x0f       # Implemented by ProtocolBinary::MYSQL_TYPE_VARCHAR
+MYSQL_TYPE_BIT = 0x10           # Implemented by ProtocolBinary::MYSQL_TYPE_BIT
+MYSQL_TYPE_TIMESTAMP2 = 0x11    # see Protocol::MYSQL_TYPE_TIMESTAMP
+MYSQL_TYPE_DATETIME2 = 0x12     # see Protocol::MYSQL_TYPE_DATETIME
+MYSQL_TYPE_TIME2 = 0x13         # see Protocol::MYSQL_TYPE_TIME
+MYSQL_TYPE_NEWDECIMAL= 0xf6     # Implemented by ProtocolBinary::MYSQL_TYPE_NEWDECIMAL
+MYSQL_TYPE_ENUM = 0xf7          # Implemented by ProtocolBinary::MYSQL_TYPE_ENUM
+MYSQL_TYPE_SET = 0xf8           # Implemented by ProtocolBinary::MYSQL_TYPE_SET
+MYSQL_TYPE_TINY_BLOB = 0xf9     # Implemented by ProtocolBinary::MYSQL_TYPE_TINY_BLOB
+MYSQL_TYPE_MEDIUM_BLOB = 0xfa   # Implemented by ProtocolBinary::MYSQL_TYPE_MEDIUM_BLOB
+MYSQL_TYPE_LONG_BLOB = 0xfb     # Implemented by ProtocolBinary::MYSQL_TYPE_LONG_BLOB
+MYSQL_TYPE_BLOB = 0xfc          # Implemented by ProtocolBinary::MYSQL_TYPE_BLOB
+MYSQL_TYPE_VAR_STRING = 0xfd    # Implemented by ProtocolBinary::MYSQL_TYPE_VAR_STRING
+MYSQL_TYPE_STRING = 0xfe        # Implemented by ProtocolBinary::MYSQL_TYPE_STRING
+MYSQL_TYPE_GEOMETRY = 0xff
+
+
+"""
+Query Event Status Vars
+"""
+Q_FLAGS2_CODE = 0x00
+Q_SQL_MODE_CODE = 0x01
+Q_CATALOG = 0x02
+Q_AUTO_INCREMENT = 0x03
+Q_CHARSET_CODE = 0x04
+Q_TIME_ZONE_CODE = 0x05
+Q_CATALOG_NZ_CODE = 0x06
+Q_LC_TIME_NAMES_CODE = 0x07
+Q_CHARSET_DATABASE_CODE = 0x08
+Q_TABLE_MAP_FOR_UPDATE_CODE = 0x09
+Q_MASTER_DATA_WRITTEN_CODE = 0x0a
+Q_INVOKERS = 0x0b
+Q_UPDATED_DB_NAMES = 0x0c
+Q_MICROSECONDS = 0x0d
+
+
+"""
+MySQL Operation Type
+"""
+MySQL_COMMAND_INSERT = 0x01
+MySQL_COMMAND_UPDATE = 0x02
+MYSQL_COMMAND_DELETE = 0x03

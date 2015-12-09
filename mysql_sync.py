@@ -1,175 +1,55 @@
-import socket
-from binascii import b2a_hex, a2b_hex
+#!/usr/bin/env python
+
+__author__ = 'jintao'
+
+import thread, threading, time
+
 from Packet import Packet, PacketManage
-from Message import ServerHandShakeMessage, ClientHandShakeMessage, ResponseMessage
-from Utils import Utils
-from MySQLCommand import CommandRegisterSlave
-from MySQLCommand import CommandDumpBinlog
-import Constants
-from BinlogEvent import BinlogEvent, BinlogEventHeader
+from BinlogEvent import BinlogEventManage
+from MYSQLChannel import MYSQLChannel
+from BinlogDataManage import BinlogDataManage
+from ConfigLoader import ConfigLoader
+from BinlogHandle import HandlerThread
 
-hand_shake_buffer = '4e0000000a352e352e34362d6c6f67001c0000005f5d39417960566e00fff72102000f80150000000000000000000047575e556c434778483f4474006d7973716c5f6e61746976655f70617373776f726400'
-hand_shake_response = '0700000200000002000000'
-register_response = '0700000100000002000000'
-query_service_id = '200000000353484f57205641524941424c4553204c494b4520275345525645525f494427'
-def handShakeService():
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_address = ('127.0.0.1', 3306)
+global_config = ConfigLoader()
+global_binlog_event_manage = BinlogEventManage()
+global_binlog_data_manage = BinlogDataManage()
+global_packet_manage = PacketManage(global_binlog_event_manage, global_binlog_data_manage)
+global_signal = threading.Event()
 
-    sock.bind(server_address)
-    sock.listen(10)
+def start_sync():
+    global global_config
+    start_pos = global_config.pos()
+    start_binlog = global_config.binlog()
 
     while True:
-        connection, client_address = sock.accept()
-        print connection, client_address
-        connection.send(a2b_hex(hand_shake_buffer))
+        mysql_channel = MYSQLChannel(global_config.host(), global_config.port(), global_config.username(), global_config.password(), global_config.database())
+        if mysql_channel.initChannel() == False:
+            return False
+        recv_data = mysql_channel.dump_binlog(start_pos, start_binlog)
+        print 'dump...'
+        if recv_data != '':
+            (packet_list, count) = global_packet_manage.parse(recv_data)
+            start_pos = global_binlog_data_manage.position()
+            start_binlog = global_binlog_data_manage.filename()
+            global_signal.set()
+            mysql_channel.close()
+        threading._sleep(3)
 
-        data = connection.recv(512)
-        print b2a_hex(data)
+def init():
+    if global_config.load('mysql_sync.conf') == False:
+        return False
 
-        connection.send(a2b_hex(hand_shake_response))
-        data = connection.recv(512)
-        print b2a_hex(data)
+    return True
 
-        connection.send(a2b_hex(register_response))
-        data = connection.recv(512)
-        print b2a_hex(data)
+def main():
+    if init() == False:
+        return
 
-    sock.close()
+    thread = HandlerThread(global_signal, global_binlog_data_manage)
+    thread.setDaemon(True)
+    thread.start()
 
-def package_handshake_response(pk, request):
-    res_pk = Packet()
-    res_mg = ClientHandShakeMessage()
+    start_sync()
 
-    res_mg.set_character_set(request.character_set())
-    res_mg.set_user_name('mysql_sync\0')
-    res_mg.set_auth_plugin_name('mysql_native_password\0')
-    res_mg.set_database('advert_database\0')
-    res_mg.set_auth_response(Utils.secureAuthMethod('123456', request.auth_plugin_data()))
-
-    #res_mg.dump()
-    (buffer, length) = res_mg.package()
-
-    res_pk.set_index(pk.index() + 1)
-    res_pk.set_payload(buffer, length)
-
-    return res_pk.package()
-
-def package_register():
-    reg_package = Packet()
-    com_reg = CommandRegisterSlave()
-    com_reg.set_server_id(100)
-    com_reg.set_slaves_hostname('127.0.0.1', len('127.0.0.1'))
-    com_reg.set_slaves_user('mysql_sync', len('mysql_sync'))
-    com_reg.set_slaves_password('123456', len('123456'))
-    com_reg.set_slaves_mysql_port(3306)
-    com_reg.set_replication_rank(0)
-    com_reg.set_master_id(1)
-
-    (pack, pack_len) = com_reg.package()
-
-    reg_package.set_payload(pack, pack_len)
-    reg_package.set_index(0)
-
-    return reg_package.package()
-
-def package_dump():
-    dump_package = Packet()
-    com_dump = CommandDumpBinlog()
-    com_dump.set_binlog_filename("data.000008")
-    com_dump.set_binlog_pos(1272)
-    com_dump.set_server_id(100)
-    com_dump.set_flags(Constants.BINLOG_DUMP_NON_BLOCK)
-
-    (buffer, buf_len) = com_dump.package()
-
-    dump_package.set_index(0)
-    dump_package.set_payload(buffer, buf_len)
-
-    return dump_package.package()
-
-def naive_client():
-    # client
-    address = ('127.0.0.1', 3306)
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect(address)
-
-    data = s.recv(512)
-    print '========== hand shake ==========='
-    print '++++++++++ server to client +++++++++++++'
-    print repr(data)
-    print b2a_hex(data)
-
-    pk = Packet()
-    mg = ServerHandShakeMessage()
-    pk.parse(data)
-    mg.parse(pk.payload_length(), pk.payload())
-
-    (response_packet, pack_len) = package_handshake_response(pk, mg)
-    print '++++++++++ client to server +++++++++++++'
-    print repr(response_packet)
-    print b2a_hex(response_packet)
-    s.send(response_packet)
-    data = s.recv(512)
-
-    print repr(data)
-    print b2a_hex(data)
-
-    print '========== register ==========='
-    (reg_packet, reg_pack_len) = package_register()
-    print '++++++++++ client to server +++++++++++++'
-    print repr(reg_packet)
-    print b2a_hex(reg_packet)
-    s.send(reg_packet)
-    data = s.recv(1024)
-    print '++++++++++ server to client +++++++++++++'
-    print repr(data)
-
-    print '========== query service id ==========='
-    query_packet = a2b_hex(query_service_id)
-    print '++++++++++ client to server +++++++++++++'
-    print query_service_id
-    s.send(query_packet)
-    data = s.recv(1024)
-    print '++++++++++ server to client +++++++++++++'
-    print repr(data)
-    print b2a_hex(data)
-
-    print '========== dump ==========='
-    (dump_packet, dump_pack_len) = package_dump()
-    print '++++++++++ client to server +++++++++++++'
-    print repr(dump_packet)
-    print b2a_hex(dump_packet)
-    s.send(dump_packet)
-
-    print '++++++++++ server to client header +++++++++++++'
-    data = s.recv(1024)
-    read_data = data
-    while len(data) == 1024:
-        s.recv(1024)
-        read_data += data
-    print len(read_data)
-    print repr(read_data)
-    print b2a_hex(read_data)
-
-    packetManage = PacketManage()
-    (packet_list, count) = packetManage.parse(read_data)
-
-    for packet in packet_list:
-        print '-------- packet ' + str(packet.index()) + '-----------'
-        packet_type = Utils.str2int(packet.payload(), 1)
-        if packet_type == 0x00:
-            binlog_event = BinlogEvent()
-            binlog_event.parse(packet.payload())
-            binlog_event.header().dump()
-        else:
-            packet_eof = ResponseMessage()
-            packet_eof.parse(packet.payload())
-            packet_eof.dump()
-
-    print '++++++++++ server to client header +++++++++++++'
-
-    #s.close()
-
-naive_client()
-#handShakeService()
+main()

@@ -5,6 +5,7 @@ __author__ = 'jintao'
 from binascii import hexlify
 from hashlib import sha1
 from binascii import a2b_hex, b2a_hex
+import struct
 
 class Utils:
     @staticmethod
@@ -45,6 +46,14 @@ class Utils:
             return Utils.hex2int(Utils.byteOrderTransfer(b2a_hex(data[0 : byte_count]), byte_count), byte_count)
 
     @staticmethod
+    def str2double(data, byte_count):
+        return struct.unpack("!f", Utils.byteOrderTransfer(b2a_hex(data[0 : byte_count]), byte_count).decode('hex'))[0]
+
+    @staticmethod
+    def str2float(data, byte_count):
+        return struct.unpack("!f", Utils.byteOrderTransfer(b2a_hex(data[0 : byte_count]), byte_count).decode('hex'))[0]
+
+    @staticmethod
     def str2lenencint(data):
         type = Utils.str2int(data, 1)
         if type < 0xFB:
@@ -59,6 +68,10 @@ class Utils:
             return (0, 0)
 
     @staticmethod
+    def lenencint2str(value):
+        return ''
+
+    @staticmethod
     def secureAuthMethod(password, random_number):
         sha1_password = a2b_hex(sha1(password).hexdigest())
         sha1_sha1_pw = a2b_hex(sha1(sha1_password).hexdigest())
@@ -71,9 +84,42 @@ class Utils:
         return b2a_hex(result)
 
     @staticmethod
-    def decodeLenencInteger(data):
-        return 0
+    def bit2list(value, bit_count):
+        bit_list = []
+        bitmask = 1
+        for i in range(bit_count):
+            if value & bitmask != 0:
+                bit_list.append(1)
+            else:
+                bit_list.append(0)
+
+            bitmask *= 2
+        return bit_list
 
     @staticmethod
-    def encodeLenencInteger(value):
-        return ''
+    def bitlist1count(list):
+        count = 0
+        for i in list:
+            if i == 1:
+                count += 1
+        return count
+
+    @staticmethod
+    def bitCount(value):
+        count = 0
+        while value != 0:
+            count += 1
+            value &= (value - 1)
+
+        return count
+
+    @staticmethod
+    def mask(count):
+        mask = 0
+        bit = 1
+        for i in range(count):
+            mask |= bit
+            bit *= 2
+
+        return mask
+

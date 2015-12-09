@@ -6,14 +6,6 @@ import sys
 import Constants
 from Utils import Utils
 
-RESPONSE_PACKET_HEADER_BYTES = 1
-RESPONSE_PACKET_WARNING_BYTES = 2
-RESPONSE_PACKET_STATUSFLAGS_BYTES = 2
-RESPONSE_PACKET_ERRORCODE_BYTES = 2
-RESPONSE_PACKET_SQLSTATEMARKER_BYTES = 1
-RESPONSE_PACKET_SQLSTATE_BYTES = 5
-
-
 class ServerHandShakeMessage:
     def __init__(self):
         self.__offset = 0
@@ -204,19 +196,22 @@ class ClientHandShakeMessage:
 
 class ResponseMessage:
     def __init__(self):
-        self.__header = 0x00
+        self.__header = Constants.SERVER_RESPONSE_OK
         self.__packet = None
+
+    def header(self):
+        return self.__header;
 
     def parse(self, data):
         offset = 0
-        self.__header = Utils.str2int(data, RESPONSE_PACKET_HEADER_BYTES)
-        offset += RESPONSE_PACKET_HEADER_BYTES
+        self.__header = Utils.str2int(data, 1)
+        offset += 1
 
-        if self.__header == 0x00:
+        if self.__header == Constants.SERVER_RESPONSE_OK:
             self.__packet = ResponseMessageOK()
-        elif self.__header == 0xFE:
+        elif self.__header == Constants.SERVER_RESPONSE_EOF:
             self.__packet = ResponseMessageEOF()
-        elif self.__header == 0xFF:
+        elif self.__header == Constants.SERVER_RESPONSE_ERR:
             self.__packet = ResponseMessageERR()
         else:
             return False
@@ -231,12 +226,27 @@ class ResponseMessage:
 
 class ResponseMessageOK(ResponseMessage):
     def __init__(self):
-        self.__header = 0x00            # 1 byte
+        self.__header = Constants.SERVER_RESPONSE_OK            # 1 byte
         self.__affected_rows = 0        # lenenc bytes
         self.__last_insert_id = 0       # lenenc bytes
         self.__status_flags = 0         # 2 bytes
         self.__warnings = 0             # 2 bytes
         self.__info = ''                 # lenenc bytes
+
+    def affected_rows(self):
+        return self.__affected_rows
+
+    def last_insert_id(self):
+        return self.__last_insert_id
+
+    def status_flags(self):
+        return self.__status_flags
+
+    def warnings(self):
+        return self.__warnings
+
+    def info(self):
+        return self.__info
 
     def parse(self, data):
         offset = 0
@@ -244,10 +254,10 @@ class ResponseMessageOK(ResponseMessage):
         offset += passed
         (self.__last_insert_id, passed) = Utils.str2lenencint(data[offset : ])
         offset += passed
-        self.__status_flags = Utils.str2int(data[offset : ], RESPONSE_PACKET_STATUSFLAGS_BYTES)
-        offset += RESPONSE_PACKET_STATUSFLAGS_BYTES
-        self.__warnings = Utils.str2int(data[offset : ], RESPONSE_PACKET_WARNING_BYTES)
-        offset += RESPONSE_PACKET_WARNING_BYTES
+        self.__status_flags = Utils.str2int(data[offset : ], 2)
+        offset += 2
+        self.__warnings = Utils.str2int(data[offset : ], 2)
+        offset += 2
         self.__info = data[offset : ]
 
         return True
@@ -258,16 +268,22 @@ class ResponseMessageOK(ResponseMessage):
 
 class ResponseMessageEOF(ResponseMessage):
     def __init__(self):
-        self.__header = 0xFE        # 1 byte(defaule:0xfe)
+        self.__header = Constants.SERVER_RESPONSE_EOF        # 1 byte(defaule:0xfe)
         self.__warnings = 0         # 2 bytes
         self.__status_flags = 0     # 2 bytes
 
+    def warnings(self):
+        return self.__warnings
+
+    def status_flags(self):
+        return self.__status_flags
+
     def parse(self, data):
         offset = 0
-        self.__warnings = Utils.str2int(data[offset : ], RESPONSE_PACKET_WARNING_BYTES)
-        offset += RESPONSE_PACKET_WARNING_BYTES
-        self.__status_flags = Utils.str2int(data[offset : ], RESPONSE_PACKET_STATUSFLAGS_BYTES)
-        offset += RESPONSE_PACKET_STATUSFLAGS_BYTES
+        self.__warnings = Utils.str2int(data[offset : ], 2)
+        offset += 2
+        self.__status_flags = Utils.str2int(data[offset : ], 2)
+        offset += 2
         return True
 
     def dump(self):
@@ -276,20 +292,32 @@ class ResponseMessageEOF(ResponseMessage):
 
 class ResponseMessageERR(ResponseMessage):
     def __init__(self):
-        self.__header = 0xFF        # 1 byte(defaule:0xfe)
+        self.__header = Constants.SERVER_RESPONSE_ERR        # 1 byte(defaule:0xfe)
         self.__error_code = 0       # 2 bytes
         self.__sql_state_marker = ''    # 1 byte
         self.__sql_state = ''       # 5 bytes
         self.__error_message = ''   # EOF
 
+    def error_code(self):
+        return self.__error_code
+
+    def sql_state_marker(self):
+        return self.__sql_state_marker
+
+    def sql_state(self):
+        return self.__sql_state
+
+    def error_message(self):
+        return self.__error_message
+
     def parse(self, data):
         offset = 0
-        self.__error_code = Utils.str2int(data[offset : ], RESPONSE_PACKET_ERRORCODE_BYTES)
-        offset += RESPONSE_PACKET_ERRORCODE_BYTES
-        self.__sql_state_marker = data[offset : offset + RESPONSE_PACKET_SQLSTATEMARKER_BYTES]
-        offset += RESPONSE_PACKET_SQLSTATEMARKER_BYTES
-        self.__sql_state = data[offset : offset + RESPONSE_PACKET_SQLSTATE_BYTES]
-        offset += RESPONSE_PACKET_SQLSTATE_BYTES
+        self.__error_code = Utils.str2int(data[offset : ], 2)
+        offset += 2
+        self.__sql_state_marker = data[offset : offset + 1]
+        offset += 1
+        self.__sql_state = data[offset : offset + 5]
+        offset += 5
         self.__error_message = data[offset : ]
         return True
 
