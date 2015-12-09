@@ -39,14 +39,14 @@ class BinlogHandlerManage:
 
     def process(self, item):
         for handler in self.__pipeline:
-            handler.process()
+            handler.process(item)
 
 class HandlerThread(threading.Thread):
-    def __init__(self, signal, binlogDataManage):
+    def __init__(self, signal, binlogDataManage, binlogHandlerManage):
         threading.Thread.__init__(self)
         self.__signal = signal
         self.__binlogDataManage = binlogDataManage
-        self.__binlogHandlerManage = BinlogHandlerManage(binlogDataManage)
+        self.__binlogHandlerManage = binlogHandlerManage
         self.__exit = False
 
     def exit(self):

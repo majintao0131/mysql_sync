@@ -9,7 +9,7 @@ from BinlogEvent import BinlogEventManage
 from MYSQLChannel import MYSQLChannel
 from BinlogDataManage import BinlogDataManage
 from ConfigLoader import ConfigLoader
-from BinlogHandle import HandlerThread
+from BinlogHandle import HandlerThread, BinlogHandlerManage, BinlogHandler
 
 global_config = ConfigLoader()
 global_binlog_event_manage = BinlogEventManage()
@@ -46,7 +46,11 @@ def main():
     if init() == False:
         return
 
-    thread = HandlerThread(global_signal, global_binlog_data_manage)
+    binlog_handler_manage = BinlogHandlerManage(global_binlog_data_manage)
+    binlog_handler1 = BinlogHandler("test_handler")
+    binlog_handler_manage.add_last_handler(binlog_handler1)
+    thread = HandlerThread(global_signal, global_binlog_data_manage, binlog_handler_manage)
+
     thread.setDaemon(True)
     thread.start()
 
