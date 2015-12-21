@@ -21,6 +21,8 @@ def start_sync():
     global global_config
     start_pos = global_config.pos()
     start_binlog = global_config.binlog()
+    global_binlog_data_manage.set_filename(start_binlog)
+    global_binlog_data_manage.set_position(start_pos)
 
     while True:
         mysql_channel = MYSQLChannel(global_config.host(), global_config.port(), global_config.username(), global_config.password(), global_config.database())

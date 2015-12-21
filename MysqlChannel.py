@@ -137,6 +137,8 @@ class MYSQLChannel:
             self.__data += data
             if len(data) < 1024:
                 break
+
+        print b2a_hex(data)
         return data
 
     def __package_close(self):

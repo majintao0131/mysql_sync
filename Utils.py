@@ -46,6 +46,15 @@ class Utils:
             return Utils.hex2int(Utils.byteOrderTransfer(b2a_hex(data[0 : byte_count]), byte_count), byte_count)
 
     @staticmethod
+    def str2int_bigendian(data, byte_count):
+        if byte_count <= 0:
+            return 0
+        elif byte_count == 1:
+            return int(b2a_hex(data[0]), 16)
+        else:
+            return Utils.hex2int(data[0, byte_count], byte_count)
+
+    @staticmethod
     def str2double(data, byte_count):
         return struct.unpack("!f", Utils.byteOrderTransfer(b2a_hex(data[0 : byte_count]), byte_count).decode('hex'))[0]
 

@@ -423,7 +423,7 @@ class BinlogTableMapEvent:
         self.__schema_name_length = 0   # 1 byte
         self.__schema_name = ''         # schema_name_length bytes
         self.__reserver1 = 0x00         # 1 byte
-        self.__table_name_length = 0x00 # 1 byte
+        self.__table_name_length = 0    # 1 byte
         self.__table_name = ''          # table_name_length bytes
         self.__reserver2 = 0x00         # 1 byte
         self.__column_count = 0         # lenenc bytes
@@ -462,6 +462,49 @@ class BinlogTableMapEvent:
     def null_bitmap(self):
         return self.__null_bitmap
 
+    def __parse_def_meta(self, data):
+        offset = 0
+        for i in range(self.__column_count):
+            column_type = self.__column_def[i]
+            if column_type == Constants.MYSQL_TYPE_STRING:
+                meta = data[offset] << 8 + data[offset + 1]
+                self.__column_meta_def.append(meta)
+                offset += 2
+            elif column_type == Constants.MYSQL_TYPE_NEWDECIMAL:
+                meta = data[offset] << 8 + data[offset + 1]
+                self.__column_meta_def.append(meta)
+                offset += 2
+            elif column_type == Constants.MYSQL_TYPE_VARCHAR \
+                or column_type == Constants.MYSQL_TYPE_VAR_STRING \
+                or column_type == Constants.MYSQL_TYPE_BIT:
+                meta = Utils.str2int(data[offset : ], 2)
+                self.__column_meta_def.append(meta)
+                offset += 2
+            elif column_type == Constants.MYSQL_TYPE_BLOB \
+                or column_type == Constants.MYSQL_TYPE_DOUBLE \
+                or column_type == Constants.MYSQL_TYPE_FLOAT \
+                or column_type == Constants.MYSQL_TYPE_GEOMETRY:
+                meta = Utils.str2int(data[offset : ], 1)
+                self.__column_meta_def.append(meta)
+                offset += 1
+            elif column_type == Constants.MYSQL_TYPE_TIME2 \
+                or column_type == Constants.MYSQL_TYPE_DATETIME2 \
+                or column_type == Constants.MYSQL_TYPE_TIMESTAMP2:
+                meta = Utils.str2int(data[offset : ], 1)
+                self.__column_meta_def.append(meta)
+                offset += 1
+            elif column_type == Constants.MYSQL_TYPE_NEWDATE \
+                or column_type == Constants.MYSQL_TYPE_ENUM \
+                or column_type == Constants.MYSQL_TYPE_SET \
+                or column_type == Constants.MYSQL_TYPE_TINY_BLOB \
+                or column_type == Constants.MYSQL_TYPE_MEDIUM_BLOB \
+                or column_type == Constants.MYSQL_TYPE_LONG_BLOB:
+                return -1;
+            else:
+                self.__column_meta_def.append(0)
+
+        return offset
+
     def parse(self, data):
         offset = 0
         self.__table_id = Utils.str2int(data[offset : ], 6)
@@ -488,9 +531,13 @@ class BinlogTableMapEvent:
 
         (self.__column_meta_def_length, passed) = Utils.str2lenencint(data[offset : ])
         offset += passed
-        for i in range(self.__column_meta_def_length):
-            self.__column_meta_def.append(Utils.str2int(data[offset : ], 1))
-            offset += 1
+
+        ret = self.__parse_def_meta(data[offset : ])
+        if ret < 0:
+            return False
+
+        offset += ret;
+
         bitmap_length = (self.__column_count + 8) / 7
         self.__null_bitmap = Utils.bit2list(Utils.str2int(data[offset : ], self.__column_count), self.__column_count)
         offset += bitmap_length
@@ -500,9 +547,13 @@ class BinlogTableMapEvent:
         for property, value in vars(self).iteritems():
             print property, ": ", value
 
+compressedBytes = {0, 1, 1, 2, 2, 3, 3, 4, 4, 4}
+digitsPerInteger = 9
+
 class BinlogRowField:
-    def __init__(self, type):
+    def __init__(self, type, meta_def):
         self.__field_type = type
+        self.__meta_def = meta_def
         self.__length = 0
         self.__value = None
 
@@ -515,23 +566,129 @@ class BinlogRowField:
     def value(self):
         return self.__value
 
+    def __parse_newdecimal(self, data, prec, deci):
+        offset = 0
+        integ = (prec - deci)
+        uncompIntergral = (integ / digitsPerInteger)
+        uncompFractional = (deci / digitsPerInteger)
+        comIntergral = integ - (uncompIntergral * digitsPerInteger)
+        compFractional = deci - (uncompFractional * digitsPerInteger)
+
+        binSize = uncompIntergral * 4 + compressedBytes[comIntergral] + uncompFractional * 4 + compressedBytes[compFractional]
+
+        value = ''
+        temp = Utils.str2int(data[offset : ], 4)
+        mask = 0
+        if temp & 0x80 == 0:
+            mask = (1 << 32) - 1
+
+        value += '-'
+
+        # clear sign
+        data[0] ^= 0x80
+
+        size = compressedBytes[comIntergral]
+        if size > 0:
+            temp = Utils.str2int(data[offset, offset + size]) ^ mask
+            value += str(temp)
+            offset += size
+
+        for i in range(uncompIntergral):
+            temp = Utils.str2int(data[offset : ], 4) ^ mask
+            offset += 4
+            value += ("%09d" % temp)
+
+        value += '.'
+
+        for i in range(uncompFractional):
+            temp = Utils.str2int(data[offset : ], 4) ^ mask
+            offset += 4
+            value += ("%09d" % temp)
+
+        size = compressedBytes[compFractional]
+        if size > 0:
+            temp = Utils.str2int(data[offset : ], size) ^ mask
+            offset += size
+            if len(str(temp)) > compFractional:
+                value += str(temp)[:compFractional]
+            else:
+                left = compFractional - len(str(temp))
+                value += (str(temp) + '0' * left)
+
+        return binSize, float(value)
+
+    def __parse_bit(self, data, nbits, length):
+        value = 0
+        offset = 0
+        if nbits > 1:
+            value = Utils.str2int(data[:length], length)
+            offset = length
+        else:
+            value = Utils.str2int(data[:1], 1)
+            offset = 1
+
+        return (offset, value, offset)
+
+    def __parse_string(self, data, length):
+        offset = 0
+        if length < 256:
+            length = Utils.str2int(data[offset : ], 1)
+            offset += 1
+            value = data[offset : offset + length]
+            self.__length = length
+            offset += length
+        else:
+            length = Utils.str2int(data[offset : ], 2)
+            offset += 2
+            value = data[offset : offset + length]
+            self.__length = length
+            offset += length
+
+        return (offset, value, length)
+
+    # 根据一个开源软件移植的代码,后期需要阅读mysql源码来解决meta_def的问题
     def parse(self, data):
         offset = 0
-        if self.__field_type == Constants.MYSQL_TYPE_STRING \
-            or self.__field_type == Constants.MYSQL_TYPE_VARCHAR \
-            or self.__field_type == Constants.MYSQL_TYPE_VAR_STRING \
-            or self.__field_type == Constants.MYSQL_TYPE_ENUM \
-            or self.__field_type == Constants.MYSQL_TYPE_SET \
-            or self.__field_type == Constants.MYSQL_TYPE_BLOB \
-            or self.__field_type == Constants.MYSQL_TYPE_MEDIUM_BLOB \
+        if self.__field_type == Constants.MYSQL_TYPE_STRING:
+            length = 0
+            if self.__meta_def >= 256:
+                b0 = self.__meta_def >> 8
+                b1 = self.__meta_def & 0xFF
+                if b0 & 0x30 != 0x30:
+                    length = (b1 | ((b0 & 0x30) ^ 0x30) << 4)
+                    self.__field_type = b0 & 0x30
+                else:
+                    length = self.__meta_def & 0xFF
+                    self.__field_type = b0
+            else:
+                self.__length = self.__meta_def
+            (passed, self.__value, self.__length) = self.__parse_string(data[offset : ], length)
+        elif self.__field_type == Constants.MYSQL_TYPE_VARCHAR \
+            or self.__field_type == Constants.MYSQL_TYPE_VAR_STRING:
+            (passed, self.__value, self.__length) = self.__parse_string(data[offset : ], self.__meta_def)
+            offset += passed
+        elif self.__field_type == Constants.MYSQL_TYPE_BLOB:
+            self.__length = Utils.str2int(data[offset : ], self.__meta_def)
+            offset += self.__meta_def
+            self.__value = data[offset : offset + self.__length]
+            offset += self.__length
+        elif self.__field_type == Constants.MYSQL_TYPE_SET:
+            nbits = self.__meta_def & 0xFF
+            n = (nbits + 7) / 8
+            (passed, self.__value, self.__length) = self.__parse_bit(data[offset : ], nbits, n)
+            offset += passed
+        elif self.__field_type == Constants.MYSQL_TYPE_ENUM:
+            l = self.__meta_def & 0xFF
+            self.__value = Utils.str2int(data[offset : ], l)
+            self.__length = l
+            offset += l
+        elif self.__field_type == Constants.MYSQL_TYPE_MEDIUM_BLOB \
             or self.__field_type == Constants.MYSQL_TYPE_LONG_BLOB \
             or self.__field_type == Constants.MYSQL_TYPE_TINY_BLOB \
             or self.__field_type == Constants.MYSQL_TYPE_GEOMETRY \
-            or self.__field_type == Constants.MYSQL_TYPE_BIT \
-            or self.__field_type == Constants.MYSQL_TYPE_DECIMAL \
-            or self.__field_type == Constants.MYSQL_TYPE_NEWDECIMAL:
-            (self.__length, passed) = Utils.str2lenencint(data[offset : ])
-            offset += passed
+            or self.__field_type == Constants.MYSQL_TYPE_DECIMAL:
+            self.__length = Utils.str2int(data[offset : ], self.__meta_def)
+            offset += self.__meta_def
             self.__value = data[offset : offset + self.__length]
             offset += self.__length
         elif self.__field_type == Constants.MYSQL_TYPE_LONGLONG:
@@ -543,8 +700,7 @@ class BinlogRowField:
             self.__length = 4
             self.__value = Utils.str2int(data[offset : ], self.__length)
             offset += self.__length
-        elif self.__field_type == Constants.MYSQL_TYPE_SHORT \
-            or self.__field_type == Constants.MYSQL_TYPE_YEAR:
+        elif self.__field_type == Constants.MYSQL_TYPE_SHORT:
             self.__length = 2
             self.__value = Utils.str2int(data[offset : ], self.__length)
             offset += self.__length
@@ -568,6 +724,16 @@ class BinlogRowField:
         elif self.__field_type == Constants.MYSQL_TYPE_TIME:
             self.__length = Utils.str2int(data[offset : ], 1)
             offset += self.__length
+        elif self.__field_type == Constants.MYSQL_TYPE_NEWDECIMAL:
+            prec = self.__meta_def >> 8
+            scale = self.__meta_def & 0xFF
+            (passed, self.__value) = self.__parse_newdecimal(data[offset : ], prec, scale)
+            offset += passed
+        elif self.__field_type == Constants.MYSQL_TYPE_BIT:
+            nbits = (self.__meta_def >> 8) * 8 + (self.__meta_def & 0xFF)
+            n = (nbits + 7) / 8
+            (passed, self.__value, self.__length) = self.__parse_bit(data[offset : ], nbits, n)
+            offset += passed
         else:
             pass
         return offset
@@ -605,7 +771,7 @@ class BinlogRow:
         self.__nul_bitmap = Utils.bit2list(Utils.str2int(data[offset : ], bit_count), bit_count)
         offset += (bit_count + 7)/8
         for i in range(self.__body.columns_number()):
-            field = BinlogRowField(table_map_event.event_body().column_def()[i])
+            field = BinlogRowField(table_map_event.event_body().column_def()[i], table_map_event.event_body().column_meta_def()[i])
             if self.__nul_bitmap[i] == 0:
                 offset += field.parse(data[offset : ])
                 self.__field_values.append(field)
@@ -618,7 +784,7 @@ class BinlogRow:
             self.__nul_bitmap2 = Utils.bit2list(Utils.str2int(data[offset : ], bit_count), bit_count)
             offset += (bit_count + 7)/8
             for i in range(self.__body.columns_number()):
-                field = BinlogRowField(table_map_event.event_body().column_def()[i])
+                field = BinlogRowField(table_map_event.event_body().column_def()[i], table_map_event.event_body().column_meta_def()[i])
                 if self.__nul_bitmap2[i] == 0:
                     offset += field.parse(data[offset : ])
                     self.__field_values2.append(field)
@@ -698,6 +864,7 @@ class BinlogRowEvent:
         total_len = len(data)
         while offset < total_len:
             row = BinlogRow(self.__binlog_event_manage, self.__header, self)
+            print b2a_hex(data[offset : ])
             offset += row.parse(data[offset : ])
             self.__rows.append(row)
 
