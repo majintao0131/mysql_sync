@@ -75,7 +75,7 @@ class MYSQLChannel:
             self.__data += data
             if len(data) < 1024:
                 break
-
+        print b2a_hex(self.__data)
         return self.__response_result()
 
     def __package_register(self):
@@ -104,7 +104,7 @@ class MYSQLChannel:
             self.__data += data
             if len(data) < 1024:
                 break
-
+        print b2a_hex(self.__data)
         return self.__response_result()
 
     def initChannel(self):

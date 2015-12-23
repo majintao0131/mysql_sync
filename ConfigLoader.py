@@ -13,6 +13,7 @@ class ConfigLoader:
         self.__password = ''
         self.__database = ''
         self.__pos = 0
+        self.__master_id = 0
         self.__binlog = ''
 
     def host(self):
@@ -36,6 +37,9 @@ class ConfigLoader:
     def binlog(self):
         return self.__binlog
 
+    def master_id(self):
+        return self.__master_id
+
     def load(self, config_file):
         try :
             config = ConfigParser.ConfigParser()
@@ -49,6 +53,7 @@ class ConfigLoader:
             self.__database = config.get('db', 'db_name')
             self.__pos = config.getint('db', 'db_pos')
             self.__binlog = config.get('db', 'db_binlog')
+            self.__master_id = config.getint('db', 'db_master_id')
         except :
             return False
 

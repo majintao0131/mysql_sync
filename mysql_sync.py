@@ -25,7 +25,7 @@ def start_sync():
     global_binlog_data_manage.set_position(start_pos)
 
     while True:
-        mysql_channel = MYSQLChannel(global_config.host(), global_config.port(), global_config.username(), global_config.password(), global_config.database())
+        mysql_channel = MYSQLChannel(global_config.host(), global_config.port(), global_config.username(), global_config.password(), global_config.database(), global_config.master_id())
         if mysql_channel.initChannel() == False:
             return False
         recv_data = mysql_channel.dump_binlog(start_pos, start_binlog)

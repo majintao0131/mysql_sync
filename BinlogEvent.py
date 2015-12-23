@@ -646,7 +646,6 @@ class BinlogRowField:
 
         return (offset, value, length)
 
-    # 根据一个开源软件移植的代码,后期需要阅读mysql源码来解决meta_def的问题
     def parse(self, data):
         offset = 0
         if self.__field_type == Constants.MYSQL_TYPE_STRING:
